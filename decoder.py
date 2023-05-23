@@ -48,7 +48,7 @@ class VertexUnet(Net):
 
         #Decoding
 
-        x = self.lstm(x)
+        x, _ = self.lstm(x)
         for i, layer in enumerate(self.decoder):
             x = skip_e[i] + F.leaky_relu(layer(x), 0.2)
         x = x + self.vertex_bias.view(1, 1, -1)
