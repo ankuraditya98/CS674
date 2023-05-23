@@ -16,7 +16,7 @@ class AudioEncoder(Net):
 
         self.conv1 = torch.nn.Conv1d(in_channels=128, out_channels=512, kernel_size=5, dilation=2)
         torch.nn.init.xavier_uniform_(self.conv1)
-        self.conv2 = torch.nn.Conv1d(in_channels = 512, out_channels=256, kernel_size=5, dilation=4)
+        self.conv2 = torch.nn.Conv1d(in_channels=512, out_channels=256, kernel_size=5, dilation=4)
         torch.nn.init.xavier_uniform_(self.conv2)
         self.conv3 = torch.nn.Conv1d(in_channels=256, out_channels=128, kernel_size=5, dilation=6)
         torch.nn.init.xavier_uniform_(self.conv3)
@@ -117,7 +117,7 @@ class ExpressionEncoder(nn.Module):
 
         return x
         
-class FusionEncoder():
+class FusionEncoder(nn.Module):
     """
     FusionEncoder to extract a combined latent space from both of audio and expression latent spaces
     """
