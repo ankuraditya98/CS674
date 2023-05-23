@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.cat as cat
 import torch
 import torch.nn.functional as F
 import torchaudio as ta
@@ -80,14 +81,12 @@ class AudioEncoder(Net):
         return x
 
 
-
-
 class ExpressionEncoder(nn.Module):
     """
-    ExpressionEncoder to extract latent spaced from 3D mesh data
+    ExpressionEncoder to extract a latent space from 3D mesh data
     """
     def __init__(self):
-        super(ExpressionEncoder, self, latent_dim = 128, n_vertices = 6172, model_name = 'expression_encoder').__init__()
+        super(ExpressionEncoder, self, latent_dim = 128, n_vertices = 6172).__init__()
 
         self.fc1 = nn.Linear(n_vertices * 3, 256)
         self.fc2 = nn.Linear(256, 128)
@@ -99,11 +98,35 @@ class ExpressionEncoder(nn.Module):
         x = nn.functional.normalize(x)
         x = x.reshape(x.shape[0], x.shape[1], x.shape[2] * 3) # flattening from BxTxVx3 to BxTx(V*3)
 
-        x = nn.functional.leaky_relu(self.fc1(x), 0.2)
-        x = nn.functional.leaky_relu(self.fc2(x), 0.2)
+        x = F.leaky_relu(self.fc1(x), 0.2)
+        x = F.leaky_relu(self.fc2(x), 0.2)
 
         x, _ = self.lstm(x)
         x = self.fc3(x)
 
         return x
         
+class FusionEncoder():
+    """
+    FusionEncoder to extract a combined latent space from both of audio and expression latent spaces
+    """
+    def __init__(self):
+        super(ExpressionEncoder, self, latent_dim = 2*128, heads = 64, categories = 128).__init__()
+        
+        # using a simple 3 layers MLP block to combine latent spaces
+        self.mlp = nn.Sequential(
+                nn.Linear(latent_dim, latent_dim),
+                nn.LeakyReLU(0.2),
+                nn.Linear(latent_dim, latent_dim)
+                nn.LeakyReLU(0.2),
+                nn.Linear(latent_dim, output_size),
+            )
+
+    def forward(self, audioSpace, expressionSpace):
+        
+        # concat latent spaces
+        x = cat((expressionSpace, audioSpace), -1)
+        x = self.mlp(x).reshape(x.shape[0], x.shape[1], self.head, self.categories)
+        x = F.gumbel_softmax(x, tau=2, hard=False, dim=-1) #TODO: test tau=1?
+
+        return x
