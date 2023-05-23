@@ -16,7 +16,7 @@ class ExpressionEncoder(nn.Module):
     def forward(self, x):
         
         x = nn.functional.normalize(x)
-        x = x.reshape(x.shape[0], x.shape[1] * 3) # flatten
+        x = x.reshape(x.shape[0], x.shape[1], x.shape[2] * 3) # flattening from BxTxVx3 to BxTx(V*3)
 
         x = nn.functional.leaky_relu(self.fc1(x), 0.2)
         x = nn.functional.leaky_relu(self.fc2(x), 0.2)
