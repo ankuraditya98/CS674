@@ -111,6 +111,9 @@ class FusionEncoder():
     """
     def __init__(self, latent_dim = 2*128, heads = 64, categories = 128):
         super(ExpressionEncoder, self).__init__()
+
+        self.categories = categories
+        self.heads = heads
         
         # using a simple 3 layers MLP block to combine latent spaces
         self.mlp = nn.Sequential(
@@ -118,14 +121,14 @@ class FusionEncoder():
                 nn.LeakyReLU(0.2),
                 nn.Linear(latent_dim, latent_dim),
                 nn.LeakyReLU(0.2),
-                nn.Linear(latent_dim, output_size),
+                nn.Linear(latent_dim, heads * categories),
             )
 
     def forward(self, audioSpace, expressionSpace):
         
         # concat latent spaces
         x = torch.cat((expressionSpace, audioSpace), -1)
-        x = self.mlp(x).reshape(x.shape[0], x.shape[1], self.head, self.categories)
+        x = self.mlp(x).reshape(x.shape[0], x.shape[1], self.heads, self.categories)
         x = F.gumbel_softmax(x, tau=2, hard=False, dim=-1) #TODO: test tau=1?
 
         return x
