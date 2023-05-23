@@ -1,40 +1,28 @@
 import torch.nn as nn
 
 
-class Expression_Encoder(nn.Module):
+class ExpressionEncoder(nn.Module):
     """
-    A PixelCNN variant you have to implement according to the instructions
+    ExpressionEncoder to extract latent spaced from 3D mesh data
     """
-
     def __init__(self):
-        super(PixelCNN, self).__init__()
+        super(ExpressionEncoder, self, latent_dim = 128, n_vertices = 6172, model_name = 'expression_encoder').__init__()
 
-        # WRITE CODE HERE TO IMPLEMENT THE MODEL STRUCTURE
+        self.fc1 = nn.Linear(n_vertices * 3, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, latent_dim)
+        self.lstm = nn.LSTM(128, 128, batch_first=True)
         
-        self.maskedconv1 = MaskedCNN(mask_type='A', in_channels=1, out_channels=16, kernel_size=3, dilation=3, padding = 3, padding_mode='reflect', bias=False)
-        self.batchnorm1 = nn.BatchNorm2d(16)
-
-        self.maskedconv2 = MaskedCNN(mask_type='B', in_channels=16, out_channels=16, kernel_size=3, dilation=3, padding = 3, padding_mode='reflect', bias=False)
-        self.batchnorm2 = nn.BatchNorm2d(16)
-
-        self.maskedconv3 = MaskedCNN(mask_type='B', in_channels=16, out_channels=16, kernel_size=3, dilation=3, padding = 3, padding_mode='reflect', bias=False)
-        self.batchnorm3 = nn.BatchNorm2d(16)
-
-        self.conv = nn.Conv2d(in_channels=16, out_channels=1, kernel_size=1, bias=True)
-        self.sigmoid = nn.Sigmoid()
-
     def forward(self, x):
+        
+        x = nn.functional.normalize(x)
+        x = x.reshape(x.shape[0], x.shape[1] * 3) # flatten
 
-        # WRITE CODE HERE TO IMPLEMENT THE FORWARD PASS
+        x = nn.functional.leaky_relu(self.fc1(x), 0.2)
+        x = nn.functional.leaky_relu(self.fc2(x), 0.2)
 
-        x = self.batchnorm1(self.maskedconv1(x))
-        x = nn.functional.leaky_relu(x)
+        x, _ = self.lstm(x)
+        x = self.fc3(x)
 
-        x = self.batchnorm2(self.maskedconv2(x))
-        x = nn.functional.leaky_relu(x)
-
-        x = self.batchnorm3(self.maskedconv3(x))
-        x = nn.functional.leaky_relu(x)
-
-        return self.sigmoid(self.conv(x))
-        # return self.conv(self.sigmoid(x))
+        return x
+        
