@@ -141,6 +141,7 @@ class FusionEncoder(nn.Module):
         # concat latent spaces
         x = torch.cat((expressionSpace, audioSpace), -1)
         x = self.mlp(x).reshape(x.shape[0], x.shape[1], self.heads, self.categories)
-        x = F.gumbel_softmax(x, tau=2, hard=False, dim=-1) #TODO: test tau=1?
+        # x = F.gumbel_softmax(x, tau=2, hard=False, dim=-1) #TODO: test tau=1?
+        x = F.log_softmax(x, dim=-1)
 
         return x
