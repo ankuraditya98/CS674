@@ -5,10 +5,10 @@ CS674 Project
 # How to run the code
 
 ## Training
-1- clone repository using `git clone`
-2- cd into the project directory
-3- download [data pickle files](https://drive.google.com/drive/folders/1N6P-v1yPJT0vDN5pO9qxFfK1nayBMG8B?usp=sharing) and save in project directory
-4- run train.py
+1. clone repository using `git clone`
+2. cd into the project directory
+3. download [data pickle files](https://drive.google.com/drive/folders/1N6P-v1yPJT0vDN5pO9qxFfK1nayBMG8B?usp=sharing) and save in project directory
+4. run train.py
 
 
 ## Testing
