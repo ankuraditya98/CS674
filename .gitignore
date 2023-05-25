@@ -1,4 +1,5 @@
 .*
+*.pyc
 !.gitignore
 mini_dataset/
 custom_dataset/
