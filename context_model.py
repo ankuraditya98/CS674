@@ -8,7 +8,7 @@ LICENSE file in the root directory of this source tree.
 import torch as th
 import torch.nn.functional as F
 
-from utils.helpers import Net
+from helpers import Net
 
 class MaskedContextConvolution(th.nn.Module):
     def __init__(self, ch_in: int, ch_out: int, heads: int, audio_dim: int, kernel_size: int = 1, dilation: int = 1):

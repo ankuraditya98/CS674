@@ -1,8 +1,8 @@
 import torch as th
 import torch.nn.functional as F
-from utils.helpers import Net
+from helpers import Net
 
-class VertexUnet(Net):
+class VertexUNet(Net):
     def __init__(self, classes: int = 128, heads: int = 64, n_vertices: int = 6172, mean: th.Tensor = None,
                  stddev: th.Tensor = None, model_name = 'vertex_unet'):
 
@@ -13,7 +13,7 @@ class VertexUnet(Net):
         self.n_vertices = n_vertices
 
         # Encoder Layers
-        self.encoder = th.nn.MyModule([
+        self.encoder = th.nn.ModuleList([
             th.nn.Linear(n_vertices * 3, 512),
             th.nn.Linear(512, 256),
             th.nn.Linear(256, 128)
@@ -25,7 +25,7 @@ class VertexUnet(Net):
         self.lstm = th.nn.LSTM(input_size=128, hidden_size=128, num_layers=2)
 
         #Decoder Layers
-        self.decoder = th.nn.MyModule([
+        self.decoder = th.nn.ModuleList([
             th.nn.Linear(128, 256),
             th.nn.Linear(256, 512),
             th.nn.Linear(512, n_vertices*3)

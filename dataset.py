@@ -37,7 +37,7 @@ class DataReader:
         geom = self.data['geom']
         audio = self.data['audio']
         return {
-            "template": template[idx],
-            "geom": geom[idx],
-            "audio": audio[idx]
+            "template": template,
+            "geom": geom,
+            "audio": audio
         }

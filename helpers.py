@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 import numpy as np
 import torch as th
 import torchaudio as ta
-from pytorch3d.io import load_obj
 
 
 def load_mask(mask_file: str, dtype = bool):
@@ -78,7 +77,7 @@ def smooth_geom(geom, mask: th.Tensor = None, filter_size: int = 9, sigma: float
     else:
         return smoothed * mask[None, :, None] + geom * (-mask[None, :, None] + 1)
 
-
+'''
 def get_template_verts(template_mesh: str):
     """
     :param template_mesh: .obj file containing the neutral face template mesh
@@ -86,6 +85,7 @@ def get_template_verts(template_mesh: str):
     """
     verts, _, _ = load_obj(template_mesh)
     return verts
+'''
 
 
 class Net(th.nn.Module):

@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import torchaudio as ta
 
-from utils.helpers import Net
+from helpers import Net
 
 
 class AudioEncoder(Net):
@@ -12,14 +12,14 @@ class AudioEncoder(Net):
 
         self.melspec = ta.transforms.MelSpectrogram(sample_rate=16000, n_fft=2048, win_length=800, hop_length=160, n_mels=80)
         self.cd = torch.nn.Conv1d(in_channels = 80, out_channels = 128, kernel_size = 5)
-        torch.nn.init.xavier_uniform_(self.cd)
+        torch.nn.init.xavier_uniform_(self.cd.weight)
 
         self.conv1 = torch.nn.Conv1d(in_channels=128, out_channels=512, kernel_size=5, dilation=2)
-        torch.nn.init.xavier_uniform_(self.conv1)
+        torch.nn.init.xavier_uniform_(self.conv1.weight)
         self.conv2 = torch.nn.Conv1d(in_channels=512, out_channels=256, kernel_size=5, dilation=4)
-        torch.nn.init.xavier_uniform_(self.conv2)
+        torch.nn.init.xavier_uniform_(self.conv2.weight)
         self.conv3 = torch.nn.Conv1d(in_channels=256, out_channels=128, kernel_size=5, dilation=6)
-        torch.nn.init.xavier_uniform_(self.conv3)
+        torch.nn.init.xavier_uniform_(self.conv3.weight)
 
 
 
@@ -38,7 +38,7 @@ class AudioEncoder(Net):
         torch.nn.init.xavier_uniform_(self.conv6)
         '''
         self.fc = torch.nn.Linear(in_features=128, out_features=128)
-        torch.nn.init.xavier_uniform_(self.fc)
+        torch.nn.init.xavier_uniform_(self.fc.weight)
 
     def forward(self, audio: torch.Tensor):
         B, T = audio.shape[0], audio.shape[1]
@@ -122,7 +122,7 @@ class FusionEncoder(nn.Module):
     FusionEncoder to extract a combined latent space from both of audio and expression latent spaces
     """
     def __init__(self, latent_dim = 2*128, heads = 64, categories = 128):
-        super(ExpressionEncoder, self).__init__()
+        super(FusionEncoder, self).__init__()
 
         self.categories = categories
         self.heads = heads
