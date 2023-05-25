@@ -12,7 +12,7 @@ CS674 Project
 
 
 ## Testing
-
+1. 
 
 # External Libraries
 * [multiface from facebook](https://github.com/facebookresearch/multiface)
@@ -25,3 +25,12 @@ CS674 Project
 * aggregating multimodal dataset and ingesting it into the model data_utils.py and pickling_face_templates.py
 * installed multiface dataset
 * partially worked on the loss function derivation
+
+
+#### Ankur
+* 
+
+
+
+#### Alejandro
+* 
