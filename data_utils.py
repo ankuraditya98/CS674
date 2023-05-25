@@ -45,17 +45,9 @@ def load_dataset(directory):
     for dir in tqdm(walk(directory)):
         for file in dir[2]:
                 if file.endswith('.obj'):
-                    # print('join(dir[0], file):', join(dir[0], file))
-                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
                     loaded_file = read_obj(join(dir[0], file))
-                    # print(loaded_file.shape)
-                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
                     geom_files.append(Data(pos=loaded_file.pos, face=loaded_file.face))
-                    # data_list.append(Data(pos=data.pos, face=data.face))
                 if file.endswith('.wav'):
-                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
-                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
-                    # audio_files = np.append(audio_files, loaded_file)
                     audio_files.append(load_audio(join(dir[0], file)))
 
     return {'geom': geom_files, 'audio': audio_files}

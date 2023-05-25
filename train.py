@@ -114,9 +114,9 @@ landmarks_file = np.loadtxt("assets/eye_keypoints.txt", dtype=np.float32).flatte
 
 mean = torch.from_numpy(np.load("assets/face_mean.npy"))
 stddev = torch.from_numpy(np.load("assets/face_std.npy"))
-mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32)#.cuda()
-eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32)#.cuda()
-landmarks = torch.from_numpy(landmarks_file).type(torch.float32)#.cuda()
+mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32).cuda()
+eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32).cuda()
+landmarks = torch.from_numpy(landmarks_file).type(torch.float32).cuda()
 
 
 # train_dataset = DataReader(segment_length=64)
