@@ -5,12 +5,13 @@ This source code is licensed under the license found in the
 LICENSE file in the root directory of this source tree.
 """
 
-import torch as th
+import torch
+from torch import nn
 import torch.nn.functional as F
 
 from helpers import Net
 
-class MaskedContextConvolution(th.nn.Module):
+class MaskedContextConvolution(nn.Module):
     def __init__(self, ch_in: int, ch_out: int, heads: int, audio_dim: int, kernel_size: int = 1, dilation: int = 1):
 
         super().__init__()
@@ -21,19 +22,19 @@ class MaskedContextConvolution(th.nn.Module):
         self.kernel_size = kernel_size
         self.dilation = dilation
 
-        self.unmasked_linear = th.nn.Conv1d(audio_dim, ch_out * heads, kernel_size=1)
+        self.unmasked_linear = nn.Conv1d(audio_dim, ch_out * heads, kernel_size=1)
 
-        self.masked_linear = th.nn.Conv1d(ch_in * heads, ch_out * heads, kernel_size=1)
+        self.masked_linear = nn.Conv1d(ch_in * heads, ch_out * heads, kernel_size=1)
 
 
-        mask = th.ones(ch_out * heads, ch_in * heads, 1)
+        mask = torch.ones(ch_out * heads, ch_in * heads, 1)
         
         for i in range(heads):
             mask[ch_out * i:ch_out * (i+1), ch_in * i:, :] = 0
         self.register_buffer("mask", mask)
 
         if kernel_size > 0:
-            self.historic = th.nn.Conv1d(ch_in * heads, ch_out * heads, kernel_size=kernel_size, dilation=dilation)
+            self.historic = nn.Conv1d(ch_in * heads, ch_out * heads, kernel_size=kernel_size, dilation=dilation)
 
         self.reset()
 
@@ -50,10 +51,10 @@ class MaskedContextConvolution(th.nn.Module):
         """
         reset buffer before animating a new sequence
         """
-        self.buffer = th.zeros(1, self.heads * self.ch_out, 0)
+        self.buffer = torch.zeros(1, self.heads * self.ch_out, 0)
         self.historic_t = -1
 
-    def forward_inference(self, t: int, h: int, context: th.Tensor, audio: th.Tensor = None):
+    def forward_inference(self, t: int, h: int, context: torch.Tensor, audio: torch.Tensor = None):
         """
         :param t: current time step
         :param h: current head
@@ -66,7 +67,7 @@ class MaskedContextConvolution(th.nn.Module):
 
         if self.historic_t < t:
             self.buffer = self.buffer.to(context.device)
-            self.buffer = th.cat([self.buffer, th.zeros(1, self.buffer.shape[1], 1, device=self.buffer.device)], dim=-1)
+            self.buffer = torch.cat([self.buffer, torch.zeros(1, self.buffer.shape[1], 1, device=self.buffer.device)], dim=-1)
 
         # next head from previous head predictions
         y_masked = self.masked_linear.bias[h*self.ch_out:(h+1)*self.ch_out].view(1, -1, 1).clone()
@@ -97,7 +98,7 @@ class MaskedContextConvolution(th.nn.Module):
         return self.buffer.permute(0, 2, 1).contiguous().view(1, -1, self.heads, self.ch_out)
 
 
-    def forward(self, context: th.Tensor, audio: th.Tensor = None):
+    def forward(self, context: torch.Tensor, audio: torch.Tensor = None):
         """
         :param context: B x T x heads x ch_in Tensor
         :param audio: B x T x audio_dim Tensor
@@ -140,7 +141,7 @@ class ContextModel(Net):
 
         hidden = 64
         self.embedding = MaskedContextConvolution(ch_in=classes, ch_out=hidden, heads=heads, audio_dim=audio_dim, kernel_size=0)
-        self.context_layers = th.nn.ModuleList([
+        self.context_layers = nn.ModuleList([
             MaskedContextConvolution(ch_in=hidden, ch_out=hidden, heads=heads, audio_dim=audio_dim, kernel_size=2, dilation=1),
             MaskedContextConvolution(ch_in=hidden, ch_out=hidden, heads=heads, audio_dim=audio_dim, kernel_size=2, dilation=2),
             MaskedContextConvolution(ch_in=hidden, ch_out=hidden, heads=heads, audio_dim=audio_dim, kernel_size=2, dilation=4),
@@ -166,7 +167,7 @@ class ContextModel(Net):
             layer.reset()
         self.logits.reset()
 
-    def _forward_inference(self, t: int, h: int, context: th.Tensor, audio: th.Tensor):
+    def _forward_inference(self, t: int, h: int, context: torch.Tensor, audio: torch.Tensor):
         """
         :param t: current time step
         :param h: current head
@@ -185,12 +186,12 @@ class ContextModel(Net):
         logits = self.logits.forward_inference(t, h, x)
         logprobs = F.log_softmax(logits, dim=-1)
         probs = F.softmax(logprobs, dim=-1)
-        labels = th.argmax(logprobs, dim=-1)
+        labels = torch.argmax(logprobs, dim=-1)
 
         return {"logprobs": logprobs, "probs": probs, "labels": labels}
 
 
-    def sample(self, audio_code: th.Tensor, argmax: bool = False):
+    def sample(self, audio_code: torchTensor, argmax: bool = False):
         """
         :param audio_code: B x T x audio_dim Tensor containing the encoded audio for the sequence
         :param argmax: if False, sample from Gumbel softmax; if True use classes with highest probabilities
@@ -198,7 +199,7 @@ class ContextModel(Net):
         """
         assert audio_code.shape[0] == 1
         T = audio_code.shape[1]
-        one_hot = th.zeros(1, T, self.heads, self.classes, device=audio_code.device)
+        one_hot = torchzeros(1, T, self.heads, self.classes, device=audio_code.device)
         self._reset()
         for t in range(T):
             start, end = max(0, t - self.receptive_field()), t + 1
@@ -209,13 +210,13 @@ class ContextModel(Net):
                 logprobs = self._forward_inference(t, h, context, audio)["logprobs"][:, -1, h, :]
                 # discretize
                 if not argmax:
-                    g = -th.log(-th.log(th.clamp(th.rand(logprobs.shape, device=logprobs.device), min=1e-10, max=1)))
+                    g = -torchlog(-torchlog(torchclamp(torchrand(logprobs.shape, device=logprobs.device), min=1e-10, max=1)))
                     logprobs = logprobs + g
-                label_idx = th.argmax(logprobs, dim=-1).squeeze().item()
+                label_idx = torchargmax(logprobs, dim=-1).squeeze().item()
                 one_hot[:, t, h, label_idx] = 1
         return {"one_hot": one_hot}
 
-    def forward(self, expression_one_hot: th.Tensor, audio_code: th.Tensor):
+    def forward(self, expression_one_hot: torchTensor, audio_code: torchTensor):
         """
         :param expression_one_hot: B x T x heads x classes Tensor containing one hot representation of previous labels
                audio_code: B x T x audio_dim Tensor containing the audio embedding
@@ -233,6 +234,6 @@ class ContextModel(Net):
         logits = self.logits(x)
         logprobs = F.log_softmax(logits, dim=-1)
         probs = F.softmax(logprobs, dim=-1)
-        labels = th.argmax(logprobs, dim=-1)
+        labels = torchargmax(logprobs, dim=-1)
 
         return {"logprobs": logprobs, "probs": probs, "labels": labels}

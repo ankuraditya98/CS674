@@ -194,8 +194,6 @@ def train(train_data, val_data):
     train_data = DataReader(mode='train')
     val_data = DataReader(mode='val')
     
-    print(train_data)
-    
     train_data_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers = 4)
     val_data_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True, num_workers = 4)
     
@@ -216,8 +214,6 @@ def train(train_data, val_data):
     decoder_optimizer = optim.Adam(decoder.parameters(),
                             lr=learning_rate, weight_decay=weight_decay)
     
-    # print("training_samples: ", training_samples.shape, training_samples)
-
     print("Starting training...")
     for epoch in range(num_epochs):
         train_loss  = 0
@@ -226,15 +222,7 @@ def train(train_data, val_data):
         audio_encoder.train()
         fusion_encoder.train()
         decoder.train()
-        
-        
-        print(len(train_data_loader))
-        
-        for i in train_data_loader:
-            print(i)
-        
-        
-        
+
         for i, batch in enumerate(train_data_loader):
             print(i)
             expression_optimizer.zero_grad()
