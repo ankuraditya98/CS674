@@ -5,6 +5,12 @@ import numpy as np
 import gzip
 import time
 from PIL import Image
+from tqdm import tqdm
+import torchaudio as ta
+from os import walk
+from torch_geometric.data import Data
+from torch_geometric.io import read_obj
+from os.path import join
 
 def save_checkpoint(model, epoch):
     """save model checkpoint"""
@@ -22,33 +28,56 @@ def grayscale_img_load(path):
         img = np.array(img.convert('L'))
         return np.expand_dims(img, axis = 0) #specific format for pytorch. Expects channel as first dimension
 
-def load_data(verbose = False):
-    '''load saved gzip files'''
-    t = time.time()
-    files = [f for f in listdir(os.getcwd()) if ".npy.gz" in f]
-    if len(files) != 0:
-        if verbose:
-            print('=> Loading data info from info.p...')
-        info = pickle.load( open( "info.p", "rb" ) )
-        if verbose:
-            print('Done')
+def load_audio(wave_file: str):
+    audio, sr = ta.load(wave_file)
+    if not sr == 16000:
+        audio = ta.transforms.Resample(sr, 16000)(audio)
+    if audio.shape[0] > 1:
+        audio = torch.mean(audio, dim=0, keepdim=True)
+    # normalize such that energy matches average energy of audio used in training
+    audio = 0.01 * audio / torch.mean(torch.abs(audio))
+    return audio
 
-        data = {}        
-        for item in files:
-            if verbose:
-                print('=> Loading ' + item + '...')
-            f = gzip.GzipFile(item, "r")
-            data[item.replace('.npy.gz','')] = np.load(f)
-            if verbose:
-                print('Done')
-        
-        if verbose:
-            print("Time Taken %.3f sec"%(time.time()-t))
-        
-        return data, info
+# Loads the raw dataset from obj and wav files
+def load_dataset(directory):
+    geom_files = []
+    audio_files = []
+    for dir in tqdm(walk(directory)):
+        for file in dir[2]:
+                if file.endswith('.obj'):
+                    # print('join(dir[0], file):', join(dir[0], file))
+                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
+                    loaded_file = read_obj(join(dir[0], file))
+                    # print(loaded_file.shape)
+                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
+                    geom_files.append(Data(pos=loaded_file.pos, face=loaded_file.face))
+                    # data_list.append(Data(pos=data.pos, face=data.face))
+                if file.endswith('.wav'):
+                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
+                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
+                    # audio_files = np.append(audio_files, loaded_file)
+                    audio_files.append(load_audio(join(dir[0], file)))
+
+    return {'geom': geom_files, 'audio': audio_files}
+
+# Loads data from saved pkl files
+def load_data(mode='train'):
+    if mode=='train':
+        with open('train_data.pickle', 'rb') as f:
+            # use the pickle.load() function to load the pickled object from the file
+            data = pickle.load(f)
+            if(len(data)==0):
+                print("Error loading training data!")
+                return
     else:
-        print("Couldn't open file. Run save_data!")
-        return [], []
+        with open('val_data.pickle', 'rb') as f:
+            # use the pickle.load() function to load the pickled object from the file
+            data = pickle.load(f)
+            if(len(data)==0):
+                print("Error loading validation data!")
+                return
+            
+    return data
 
 def listdir(path):
     ''' ignore any hidden fiels while loading files in directory'''

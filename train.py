@@ -3,15 +3,18 @@ import numpy as np
 import torch.utils.data as utils_data
 import torch
 import torch.nn as nn
-import torch.optim
+import torch.optim as optim
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
-from model import PixelCNN
 from data_utils import *
 from tqdm import tqdm
 
 from torch_geometric.io import read_obj
 from torch_geometric.data import Data, DataLoader
+from decoder import VertexUNet
+from encoders import AudioEncoder, ExpressionEncoder, FusionEncoder
+from dataset import DataReader
+from context_model import ContextModel
 import torchaudio as ta
 from os import walk
 from os.path import join
@@ -93,36 +96,11 @@ def autoregressive_loss(logprobs, target_labels):
     loss = nn.NLLLoss()
     return loss(logprobs.view(-1, logprobs.shape[-1]), target_labels.view(-1))
 
-def load_audio(wave_file: str):
-    audio, sr = ta.load(wave_file)
-    if not sr == 16000:
-        audio = ta.transforms.Resample(sr, 16000)(audio)
-    if audio.shape[0] > 1:
-        audio = torch.mean(audio, dim=0, keepdim=True)
-    # normalize such that energy matches average energy of audio used in training
-    audio = 0.01 * audio / torch.mean(torch.abs(audio))
-    return audio
-
-def load_dataset(directory):
-    geom_files = []
-    audio_files = []
-    for dir in tqdm(walk(directory)):
-        for file in dir[2]:
-                if file.endswith('.obj'):
-                    # print('join(dir[0], file):', join(dir[0], file))
-                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
-                    loaded_file = read_obj(join(dir[0], file))
-                    # print(loaded_file.shape)
-                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
-                    geom_files.append(Data(pos=loaded_file.pos, face=loaded_file.face))
-                    # data_list.append(Data(pos=data.pos, face=data.face))
-                if file.endswith('.wav'):
-                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
-                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
-                    # audio_files = np.append(audio_files, loaded_file)
-                    audio_files.append(load_audio(join(dir[0], file)))
-
-    return {'geom': geom_files, 'audio': audio_files}
+def reconstruct(encoder, template, expression_code, audio_code, decoder):
+        logprobs = encoder(expression_code, audio_code)
+        z = quantize(logprobs)["one_hot"]
+        recon = decoder(template.unsqueeze(1).expand(-1, z.shape[1], -1, -1).contiguous(), z)
+        return recon
 
 ###############################################################################
 
@@ -134,7 +112,8 @@ landmarks_file = np.loadtxt("assets/eye_keypoints.txt", dtype=np.float32).flatte
 
 # encoder = encoder.cuda()
 
-
+mean = torch.from_numpy(np.load("assets/face_mean.npy"))
+stddev = torch.from_numpy(np.load("assets/face_std.npy"))
 mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32)#.cuda()
 eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32)#.cuda()
 landmarks = torch.from_numpy(landmarks_file).type(torch.float32)#.cuda()
@@ -156,17 +135,10 @@ landmarks = torch.from_numpy(landmarks_file).type(torch.float32)#.cuda()
 #     # use the pickle.dump() function to pickle the object and write it to the file
 #     pickle.dump(val_data, f)
 
-with open('train_data.pickle', 'rb') as f:
-    # use the pickle.load() function to load the pickled object from the file
-    train_data = pickle.load(f)
-with open('val_data.pickle', 'rb') as f:
-    # use the pickle.load() function to load the pickled object from the file
-    val_data = pickle.load(f)
-
-batch_size = 32
+# batch_size = 32
 # train_data_geom_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
-print("data['geom'].shape: ", len(train_data['geom']))
+# print("data['geom'].shape: ", len(train_data['geom']))
 
 # template = data["template"].cuda()
 # geom = data["geom"].cuda()
@@ -195,7 +167,7 @@ print("data['geom'].shape: ", len(train_data['geom']))
 
 ###############################################################################
 
-def trainARImage(train_dataset_path, val_dataset_path, verbose=False, data_npy_exists = False):
+def train(train_data, val_data):
     """
     this function trains an auto-regressive model for image synthesis
 
@@ -206,116 +178,180 @@ def trainARImage(train_dataset_path, val_dataset_path, verbose=False, data_npy_e
     
     the function should return a trained convnet
     """
+    
+    num_epochs = 100
+    batch_size = 8
+    learning_rate = 1e-4
+    weight_decay = 1e-3
+    
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    # Read all images, and save them in numpy matrix.
-    if not data_npy_exists:
-        save_data(train_dataset_path, val_dataset_path, verbose)
-
-    # # Load saved numpy matrix
-    data, info = load_data(verbose)
-
-    # Get train data
-    train_imgs = data['train_imgs']
-    train_imgs = Variable(torch.from_numpy(train_imgs))
-
-    # Get validation data
-    val_imgs = data['val_imgs']
-    val_imgs = Variable(torch.from_numpy(val_imgs))
-    val_imgs = val_imgs.to(device) # keep them in the cuda device
-
-    if(len(train_imgs)==0):
-        print("Error loading training data!")
-        return
-    if(len(val_imgs)==0):
-        print("Error loading validation data!")
-        return
-
-    # An interactive plot showing how loss function on the training and validation splits
-    fig, axes = plt.subplots(ncols=1, nrows=2)
-    axes[0].set_title('Training loss')
-    axes[1].set_title('Validation loss')
-    plt.tight_layout()
-    plt.ion()
-    plt.show()
     
-    # Model/Learning hyperparameter definitions
-    model     = PixelCNN().to(device)
-    criterion = nn.L1Loss()
-    learningRate = 0.001 
-    numEpochs    = 20
-    weightDecay  = 0.001
-    batch_size   = 64
-    optimizer    = torch.optim.AdamW(model.parameters(), lr=learningRate, weight_decay=weightDecay)
-
-    training_samples = utils_data.TensorDataset(train_imgs)
-    data_loader      = utils_data.DataLoader(training_samples, batch_size=batch_size, shuffle=True, num_workers = 0)
-
+    train_data = DataReader(mode='train')
+    val_data = DataReader(mode='val')
+    
+    train_data_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers = 0)
+    val_data_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True, num_workers = 0)
+    
+    
+    expression_encoder = ExpressionEncoder().to(device)
+    expression_optimizer = optim.Adam(expression_encoder.parameters(),
+                            lr=learning_rate, weight_decay=weight_decay)
+    
+    audio_encoder = AudioEncoder().to(device)
+    audio_optimizer = optim.Adam(audio_encoder.parameters(),
+                            lr=learning_rate, weight_decay=weight_decay)
+    
+    fusion_encoder = FusionEncoder().to(device)
+    fusion_optimizer = optim.Adam(fusion_encoder.parameters(),
+                            lr=learning_rate, weight_decay=weight_decay)
+    
+    decoder = VertexUNet(mean=mean, stddev=stddev).to(device)
+    decoder_optimizer = optim.Adam(decoder.parameters(),
+                            lr=learning_rate, weight_decay=weight_decay)
+    
     # print("training_samples: ", training_samples.shape, training_samples)
 
     print("Starting training...")
-    for epoch in range(numEpochs):
+    for epoch in range(num_epochs):
         train_loss  = 0
         val_loss = 0
-        model.train()
-        for i, batch in enumerate(data_loader):
+        expression_encoder.train()
+        audio_encoder.train()
+        fusion_encoder.train()
+        decoder.train()
+        for i, batch in enumerate(train_data_loader):
+            expression_optimizer.zero_grad()
+            audio_optimizer.zero_grad()
+            fusion_optimizer.zero_grad()
+            decoder_optimizer.zero_grad()
             
-            # WRITE CODE HERE TO IMPLEMENT 
-            # THE FORWARD PASS AND BACKPROPAGATION
-            # FOR EACH PASS ALONG WITH THE L1 LOSS COMPUTATION
-            optimizer.zero_grad()
+            B, T = batch['geom'].shape[0], batch['geom'].shape[1]
             
-            # forward pass
-            prediction = model(batch[0])
+            expression_code = expression_encoder(batch['geom'])
+            audio_code = audio_encoder(batch['audio'])
+            template = batch['template']
+            
+            recon = reconstruct(fusion_encoder, template, expression_code, audio_code, decoder)
+            
+            rec_loss = recon_loss(recon, batch['geom'])
+
+            lmk_loss = landmark_loss(recon, batch['geom'], landmarks)
+            
+            audio_cons_recon = reconstruct(fusion_encoder, template, expression_code[random_shift(B), :, :], audio_code, decoder)
+            exp_cons_recon = reconstruct(fusion_encoder, template, expression_code, audio_code[random_shift(B), :, :], decoder)
+            mc_loss = modality_crossing_loss(audio_cons_recon, exp_cons_recon, batch['geom'], mouth_mask, eye_mask)
 
             # loss calculation
-            loss = criterion(prediction, batch[0])
+            loss = torch.sum(torch.stack([rec_loss, lmk_loss, mc_loss]))
 
             # backwards pass
             loss.backward()
 
-            optimizer.step()
+            expression_optimizer.step()
+            audio_optimizer.step()
+            fusion_optimizer.step()
+            decoder_optimizer.step()
 
-            train_loss = loss.detach().numpy()
+            train_loss += loss.detach().numpy()
 
-            if verbose:
-                print('Epoch [%d/%d], Iter [%d/%d], Training loss: %.4f' %(epoch+1, numEpochs, i+1, len(train_imgs)//batch_size, train_loss/(i+1)))
+            print('Epoch [%d/%d], Iter [%d/%d], Training loss: %.4f' %(epoch+1, num_epochs, i+1, len(train_data_loader), train_loss/(i+1)))
 
-        # WRITE CODE HERE TO EVALUATE THE LOSS ON THE VALIDATION DATASET
-        model.eval()
+        train_loss /= i
+        
+        expression_encoder.eval()
+        audio_encoder.eval()
+        fusion_encoder.eval()
+        decoder.eval()
 
-        # forward pass
-        eval_prediction = model(val_imgs)
+        for i, batch in enumerate(val_data_loader):
+            B, T = batch['geom'].shape[0], batch['geom'].shape[1]
+            
+            expression_code = expression_encoder(batch['geom'])
+            audio_code = audio_encoder(batch['audio'])
+            template = batch['template']
+            
+            recon = reconstruct(fusion_encoder, template, expression_code, audio_code, decoder)
+            
+            rec_loss = recon_loss(recon, batch['geom'])
 
-        # loss calculation
-        eval_loss = criterion(eval_prediction, val_imgs)
+            lmk_loss = landmark_loss(recon, batch['geom'], landmarks)
+            
+            audio_cons_recon = reconstruct(fusion_encoder, template, expression_code[random_shift(B), :, :], audio_code, decoder)
+            exp_cons_recon = reconstruct(fusion_encoder, template, expression_code, audio_code[random_shift(B), :, :], decoder)
+            mc_loss = modality_crossing_loss(audio_cons_recon, exp_cons_recon, batch['geom'], mouth_mask, eye_mask)
 
-        val_loss = eval_loss.detach().numpy()
+            # loss calculation
+            loss = torch.sum(torch.stack([rec_loss, lmk_loss, mc_loss]))
 
-        print("train_loss: ", type(train_loss), train_loss.shape)
-        print("val_loss: ", type(val_loss), val_loss.shape)
-
-        # show the plots
-        if epoch != 0:            
-            axes[0].plot([int(epoch)-1, int(epoch)], [prevtrain_loss, train_loss/(i+1)], marker='o', color="blue", label="train")
-            axes[1].plot([int(epoch)-1, int(epoch)], [prevval_loss, val_loss], marker='o', color="red", label="validation")
-            plt.pause(0.0001) # pause required to update the graph
-
-        if epoch==1:
-            axes[0].legend(loc='upper right')
-            axes[1].legend(loc='upper right')
-
-        prevtrain_loss = train_loss/(i+1)
-        prevval_loss = val_loss
+            val_loss += loss.detach().numpy()
+            
+        val_loss /= i
     
         # report scores per epoch
-        print('Epoch [%d/%d], Training loss: %.4f, Validation loss: %.4f'%(epoch+1, numEpochs, train_loss/(i+1), val_loss))
+        print('Epoch [%d/%d], Training loss: %.4f, Validation loss: %.4f'%(epoch+1, num_epochs, train_loss, val_loss))
+        
+    context_model = ContextModel().to(device)
+    context_model_optimizer = optim.Adam(context_model.parameters(),
+                            lr=learning_rate, weight_decay=weight_decay)
+    
+    print("Starting training...")
+    for epoch in range(num_epochs):
+        train_loss  = 0
+        val_loss = 0
+        context_model.train()
+        for i, batch in enumerate(train_data_loader):
+            context_model_optimizer.zero_grad()
+            
+            B, T = batch['geom'].shape[0], batch['geom'].shape[1]
+            
+            expression_code = expression_encoder(batch['geom'])
+            audio_code = audio_encoder(batch['audio'])
+            template = batch['template']
+            
+            encoding = fusion_encoder(expression_code, audio_code)
+            quantized = quantize(encoding, argmax=True)
+            one_hot = quantized["one_hot"].contiguous().detach()
+            target_labels = quantized["labels"].contiguous().detach()
+            logprobs = context_model(one_hot,audio_code)["logprobs"]
+            autoencoder_loss = autoregressive_loss(logprobs, target_labels)
 
-        # save trained models
-        save_checkpoint(model, epoch+1)
+            # loss calculation
+            loss = torch.sum(autoencoder_loss)
 
-        # save loss figures
-        plt.savefig("error-plot.png")
+            # backwards pass
+            loss.backward()
 
-    return model, info
+            context_model_optimizer.step()
+
+            train_loss += loss.detach().numpy()
+
+            print('Epoch [%d/%d], Iter [%d/%d], Training loss: %.4f' %(epoch+1, num_epochs, i+1, len(train_data_loader), train_loss/(i+1)))
+
+        train_loss /= i
+        
+        context_model.eval()
+
+        for i, batch in enumerate(val_data_loader):
+            B, T = batch['geom'].shape[0], batch['geom'].shape[1]
+            
+            expression_code = expression_encoder(batch['geom'])
+            audio_code = audio_encoder(batch['audio'])
+            template = batch['template']
+            
+            encoding = fusion_encoder(expression_code, audio_code)
+            quantized = quantize(encoding, argmax=True)
+            one_hot = quantized["one_hot"].contiguous().detach()
+            target_labels = quantized["labels"].contiguous().detach()
+            logprobs = context_model(one_hot,audio_code)["logprobs"]
+            autoencoder_loss = autoregressive_loss(logprobs, target_labels)
+
+            # loss calculation
+            loss = torch.sum(autoencoder_loss)
+
+            val_loss += loss.detach().numpy()
+            
+        val_loss /= i
+    
+        # report scores per epoch
+        print('Epoch [%d/%d], Training loss: %.4f, Validation loss: %.4f'%(epoch+1, num_epochs, train_loss, val_loss))
