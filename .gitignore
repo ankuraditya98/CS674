@@ -2,3 +2,5 @@
 !.gitignore
 mini_dataset/
 custom_dataset/
+val_data.pickle
+train_data.pickle
