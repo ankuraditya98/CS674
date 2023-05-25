@@ -7,7 +7,15 @@ import torch.optim
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 from model import PixelCNN
-from data_utils import *  
+from data_utils import *
+from tqdm import tqdm
+
+from torch_geometric.io import read_obj
+from torch_geometric.data import Data, DataLoader
+import torchaudio as ta
+from os import walk
+from os.path import join
+import pickle
 
 def gumbel_softmax(logprobs, tau=1.0, argmax=False):
     # Decides whether to re-scale probabilities or not based on parameters
@@ -85,19 +93,80 @@ def autoregressive_loss(logprobs, target_labels):
     loss = nn.NLLLoss()
     return loss(logprobs.view(-1, logprobs.shape[-1]), target_labels.view(-1))
 
+def load_audio(wave_file: str):
+    audio, sr = ta.load(wave_file)
+    if not sr == 16000:
+        audio = ta.transforms.Resample(sr, 16000)(audio)
+    if audio.shape[0] > 1:
+        audio = torch.mean(audio, dim=0, keepdim=True)
+    # normalize such that energy matches average energy of audio used in training
+    audio = 0.01 * audio / torch.mean(torch.abs(audio))
+    return audio
+
+def load_dataset(directory):
+    geom_files = []
+    audio_files = []
+    for dir in tqdm(walk(directory)):
+        for file in dir[2]:
+                if file.endswith('.obj'):
+                    # print('join(dir[0], file):', join(dir[0], file))
+                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
+                    loaded_file = read_obj(join(dir[0], file))
+                    # print(loaded_file.shape)
+                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
+                    geom_files.append(Data(pos=loaded_file.pos, face=loaded_file.face))
+                    # data_list.append(Data(pos=data.pos, face=data.face))
+                if file.endswith('.wav'):
+                    # loaded_file = np.loadtxt(join(dir[0], file)).astype(np.float32)
+                    # loaded_file = torch.from_numpy(loaded_file)#.cuda()
+                    # audio_files = np.append(audio_files, loaded_file)
+                    audio_files.append(load_audio(join(dir[0], file)))
+
+    return {'geom': geom_files, 'audio': audio_files}
+
 ###############################################################################
 
 # Some samples of how to call the loss functions with appropriate input parameters
 
-# mouth_mask_file = np.loadtxt("assets/weighted_mouth_mask.txt").astype(np.float32).flatten()
-# eye_mask_file = np.loadtxt("assets/weighted_eye_mask.txt", dtype=np.float32).flatten()
-# landmarks_file = np.loadtxt("assets/eye_keypoints.txt", dtype=np.float32).flatten()
+mouth_mask_file = np.loadtxt("assets/weighted_mouth_mask.txt").astype(np.float32).flatten()
+eye_mask_file = np.loadtxt("assets/weighted_eye_mask.txt", dtype=np.float32).flatten()
+landmarks_file = np.loadtxt("assets/eye_keypoints.txt", dtype=np.float32).flatten()
 
 # encoder = encoder.cuda()
 
-# mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32).cuda()
-# eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32).cuda()
-# landmarks = torch.from_numpy(landmarks_file).type(torch.float32).cuda()
+
+mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32)#.cuda()
+eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32)#.cuda()
+landmarks = torch.from_numpy(landmarks_file).type(torch.float32)#.cuda()
+
+
+# train_dataset = DataReader(segment_length=64)
+# val_dataset = DataReader(segment_length=64)
+
+# train_data_directory = './custom_dataset/train'
+# val_data_directory = './custom_dataset/val'
+
+# train_data = load_dataset(train_data_directory)
+# with open('train_data.pickle', 'wb') as f:
+#     # use the pickle.dump() function to pickle the object and write it to the file
+#     pickle.dump(train_data, f)
+
+# val_data = load_dataset(val_data_directory)
+# with open('val_data.pickle', 'wb') as f:
+#     # use the pickle.dump() function to pickle the object and write it to the file
+#     pickle.dump(val_data, f)
+
+with open('train_data.pickle', 'rb') as f:
+    # use the pickle.load() function to load the pickled object from the file
+    train_data = pickle.load(f)
+with open('val_data.pickle', 'rb') as f:
+    # use the pickle.load() function to load the pickled object from the file
+    val_data = pickle.load(f)
+
+batch_size = 32
+# train_data_geom_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+
+print("data['geom'].shape: ", len(train_data['geom']))
 
 # template = data["template"].cuda()
 # geom = data["geom"].cuda()
@@ -113,7 +182,7 @@ def autoregressive_loss(logprobs, target_labels):
 # exp_cons_recon = self._reconstruct(template, encoding["expression_code"], encoding["audio_code"][self.random_shift(B), :, :])
 # modality_crossing_loss = modality_crossing_loss(audio_cons_recon, exp_cons_recon, geom, mouth_mask, eye_mask)
 
-# The encoder is a pre-trained model and is expected to be passed with loaded weights
+# # The encoder is a pre-trained model and is expected to be passed with loaded weights
 
 # encoder = encoder.cuda().eval()
 
