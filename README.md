@@ -28,7 +28,9 @@ CS674 Project
 
 
 #### Ankur
-* 
+* wrote audio encoder - encoder.py (lines 9-92)
+* wrote decoder.py lines(5-60)
+* Worked on Autoregressive Model - Contex_model.py 
 
 
 
