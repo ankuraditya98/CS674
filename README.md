@@ -11,10 +11,6 @@ This project implements a simpler version of meshtalk for generating 3D animated
 3. download [data pickle files](https://drive.google.com/drive/folders/1N6P-v1yPJT0vDN5pO9qxFfK1nayBMG8B?usp=sharing) and save in project directory
 4. run train.py
 
-
-## Testing
-1. 
-
 # External Libraries
 * [multiface from facebook](https://github.com/facebookresearch/multiface)
 
@@ -38,8 +34,3 @@ This project implements a simpler version of meshtalk for generating 3D animated
 * wrote training script
 * worked on report and slides
 * did the presentation
-
-
-
-#### Alejandro
-* 
