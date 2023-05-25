@@ -31,7 +31,13 @@ This project implements a simpler version of meshtalk for generating 3D animated
 #### Ankur
 * wrote audio encoder - encoder.py (lines 9-92)
 * wrote decoder.py lines(5-60)
-* Worked on Autoregressive Model - Contex_model.py 
+* Worked on Autoregressive Model - Contex_model.py
+
+#### Alejandro
+* wrote loss function definitions
+* wrote training script
+* worked on report and slides
+* did the presentation
 
 
 
