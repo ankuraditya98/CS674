@@ -114,14 +114,18 @@ landmarks_file = np.loadtxt("assets/eye_keypoints.txt", dtype=np.float32).flatte
 
 mean = torch.from_numpy(np.load("assets/face_mean.npy"))
 stddev = torch.from_numpy(np.load("assets/face_std.npy"))
-mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32).cuda()
-eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32).cuda()
-landmarks = torch.from_numpy(landmarks_file).type(torch.float32).cuda()
 
 
-# train_dataset = DataReader(segment_length=64)
-# val_dataset = DataReader(segment_length=64)
+mouth_mask = torch.from_numpy(mouth_mask_file).type(torch.float32)#.cuda()
+eye_mask = torch.from_numpy(eye_mask_file).type(torch.float32)#.cuda()
+landmarks = torch.from_numpy(landmarks_file).type(torch.float32)#.cuda()
 
+'''
+train_dataset = DataReader(segment_length=64, mode='train')
+val_dataset = DataReader(segment_length=64, mode='val')
+
+train(train_data, val_data)
+'''
 # train_data_directory = './custom_dataset/train'
 # val_data_directory = './custom_dataset/val'
 
@@ -180,7 +184,7 @@ def train(train_data, val_data):
     """
     
     num_epochs = 100
-    batch_size = 8
+    batch_size = 1
     learning_rate = 1e-4
     weight_decay = 1e-3
     
@@ -190,8 +194,10 @@ def train(train_data, val_data):
     train_data = DataReader(mode='train')
     val_data = DataReader(mode='val')
     
-    train_data_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers = 0)
-    val_data_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True, num_workers = 0)
+    print(train_data)
+    
+    train_data_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers = 4)
+    val_data_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True, num_workers = 4)
     
     
     expression_encoder = ExpressionEncoder().to(device)
@@ -220,13 +226,23 @@ def train(train_data, val_data):
         audio_encoder.train()
         fusion_encoder.train()
         decoder.train()
+        
+        
+        print(len(train_data_loader))
+        
+        for i in train_data_loader:
+            print(i)
+        
+        
+        
         for i, batch in enumerate(train_data_loader):
+            print(i)
             expression_optimizer.zero_grad()
             audio_optimizer.zero_grad()
             fusion_optimizer.zero_grad()
             decoder_optimizer.zero_grad()
             
-            B, T = batch['geom'].shape[0], batch['geom'].shape[1]
+            B, T = batch['geom'].x.shape[0], batch['geom'].x.shape[1]
             
             expression_code = expression_encoder(batch['geom'])
             audio_code = audio_encoder(batch['audio'])
@@ -266,20 +282,20 @@ def train(train_data, val_data):
 
         for i, batch in enumerate(val_data_loader):
             B, T = batch['geom'].shape[0], batch['geom'].shape[1]
+            with torch.no_grad():
+                expression_code = expression_encoder(batch['geom'])
+                audio_code = audio_encoder(batch['audio'])
+                template = batch['template']
             
-            expression_code = expression_encoder(batch['geom'])
-            audio_code = audio_encoder(batch['audio'])
-            template = batch['template']
+                recon = reconstruct(fusion_encoder, template, expression_code, audio_code, decoder)
             
-            recon = reconstruct(fusion_encoder, template, expression_code, audio_code, decoder)
-            
-            rec_loss = recon_loss(recon, batch['geom'])
+                rec_loss = recon_loss(recon, batch['geom'])
 
-            lmk_loss = landmark_loss(recon, batch['geom'], landmarks)
+                lmk_loss = landmark_loss(recon, batch['geom'], landmarks)
             
-            audio_cons_recon = reconstruct(fusion_encoder, template, expression_code[random_shift(B), :, :], audio_code, decoder)
-            exp_cons_recon = reconstruct(fusion_encoder, template, expression_code, audio_code[random_shift(B), :, :], decoder)
-            mc_loss = modality_crossing_loss(audio_cons_recon, exp_cons_recon, batch['geom'], mouth_mask, eye_mask)
+                audio_cons_recon = reconstruct(fusion_encoder, template, expression_code[random_shift(B), :, :], audio_code, decoder)
+                exp_cons_recon = reconstruct(fusion_encoder, template, expression_code, audio_code[random_shift(B), :, :], decoder)
+                mc_loss = modality_crossing_loss(audio_cons_recon, exp_cons_recon, batch['geom'], mouth_mask, eye_mask)
 
             # loss calculation
             loss = torch.sum(torch.stack([rec_loss, lmk_loss, mc_loss]))
@@ -355,3 +371,8 @@ def train(train_data, val_data):
     
         # report scores per epoch
         print('Epoch [%d/%d], Training loss: %.4f, Validation loss: %.4f'%(epoch+1, num_epochs, train_loss, val_loss))
+        
+train_dataset = DataReader(segment_length=64, mode='train')
+val_dataset = DataReader(segment_length=64, mode='val')
+
+train(train_dataset, val_dataset)
