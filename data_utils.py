@@ -60,6 +60,17 @@ def load_dataset(directory):
 
     return {'geom': geom_files, 'audio': audio_files}
 
+# Loads the template faces from the dataset
+def load_template_dataset(directory):
+    temp_files = []
+    for dir in tqdm(walk(directory)):
+        for file in dir[2]:
+                if file.endswith('.obj'):
+                    loaded_file = read_obj(join(dir[0], file))
+                    temp_files.append(Data(pos=loaded_file.pos, face=loaded_file.face))
+
+    return temp_files
+
 # Loads data from saved pkl files
 def load_data(mode='train'):
     if mode=='train':
