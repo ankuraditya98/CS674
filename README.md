@@ -19,7 +19,7 @@ CS674 Project
 
 # Member Contributions
 
-## Abdullah
+#### Abdullah
 * wrote encoders to extract facial features and fuse them with audio features - encoder.py (lines 94 - 147)
 * data preprocessing, data_preprocessing.py
 * aggregating multimodal dataset and ingesting it into the model data_utils.py and pickling_face_templates.py
